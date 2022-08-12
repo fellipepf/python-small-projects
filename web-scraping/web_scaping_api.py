@@ -33,7 +33,7 @@ def clean_property_info(house_data_raw):
     price_raw = house_data_raw.get('price')
 
     try:
-        price = Decimal("".join(d for d in price_raw if d.isdigit() or d == '.'))
+        price = float("".join(d for d in price_raw if d.isdigit() or d == '.'))
     except:
         price = None
 
@@ -41,11 +41,13 @@ def clean_property_info(house_data_raw):
 
 
     #address
+    # the address
     address_raw = house_data_raw.get('address')
     address_raw = address_raw.split(", ")
-    result['street'] = address_raw[0]
-    result['city'] = address_raw[1]
-    result['county'] = address_raw[2]
+    print(address_raw)
+    #result['street'] = address_raw[0]
+    #result['city'] = address_raw[1]
+    result['county'] = address_raw[-1]
 
     #rooms
     rooms_raw = house_data_raw.get('rooms')
@@ -57,14 +59,27 @@ def clean_property_info(house_data_raw):
     bath_raw = bath_raw.split()
     result['baths'] = bath_raw[0]
 
+    #size
+    size_raw = house_data_raw.get('size')
+    try:
+        size_raw = size_raw.split()
+        result['size'] = size_raw[0]
+    except:
+        result['size'] = None
+
+    #type
+    result['type'] = house_data_raw.get('type')
+
     #energy class
     energy_raw = house_data_raw.get('energy_class')
     head, tail = os.path.split(energy_raw)
     energy = tail.split()
     result['energy'] = energy[0]
 
+    #agent
+    result['agent'] = house_data_raw.get('agent')
 
-
+    return result
 
 
 def get_text_from_tag(tag, attibute):
@@ -76,11 +91,15 @@ def get_text_from_tag(tag, attibute):
 
     return result
 
+# TODO should be called just once
+def total_houses(soup):
+    total_houses = soup.find('h1', attrs={'data-testid': 'search-h1'}).text
+    return total_houses
+
 
 def extract_data(soup):
-    total_properties = soup.find('h1', attrs={'data-testid': 'search-h1'}).text
-
     properties_group = soup.find('ul', attrs={'data-testid': 'results'})
+    result_houses_page = pd.DataFrame()
 
     regex = re.compile('result-.*')
     for prop in properties_group.find_all('li', attrs={'data-testid': regex}):
@@ -108,7 +127,11 @@ def extract_data(soup):
         house_data_raw['energy_class'] = energy_class
         house_data_raw['agent'] = agent
 
-        clean_property_info(house_data_raw)
+        house_cleaned = clean_property_info(house_data_raw)
+
+        result_houses_page = result_houses_page.append(house_cleaned, ignore_index=True)
+
+    return result_houses_page
 
 
 def get_content_from_url():
@@ -124,17 +147,33 @@ def create_page_interval(items_per_page: int, total_items: int):
 
     return list_url
 
+def run_extraction(list_url):
+
+    result_dataset = pd.DataFrame()
+    for url in list_url:
+
+        soap = parse_url(url)
+        house_page = extract_data(soap)
+        result_dataset = result_dataset.append(house_page, ignore_index=True)
+
+    return result_dataset
+
+def export_dataset(dataset):
+    dataset.to_csv('dataset.csv', index=False)
 
 if __name__ == "__main__":
     items_per_page = 20
-    total = 310
+    total = 45
 
-    #list_url = create_page_interval(items_per_page, total)
-    #print(list_url)
+    list_url = create_page_interval(items_per_page, total)
+    print(list_url)
+    dataset = run_extraction(list_url)
+    export_dataset(dataset)
 
-    url = f"https://www.daft.ie/property-for-sale/ireland?pageSize={items_per_page}from={0}"
-    soap = parse_url(url)
-    extract_data(soap)
+
+    # url = f"https://www.daft.ie/property-for-sale/ireland?pageSize={items_per_page}from={0}"
+    # soap = parse_url(url)
+    # extract_data(soap)
 
 
 #
